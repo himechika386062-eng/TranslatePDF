@@ -1,0 +1,341 @@
+﻿<Window x:Class="TranslatePDF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TranslatePDF"
+        Title="PDF Translator"
+        FontFamily="Impact"
+        Height="560"
+        Width="600"
+        Background="#EEF2F6"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver">
+
+    <!-- ===================== -->
+    <!-- スタイル -->
+    <!-- ===================== -->
+    <Window.Resources>
+        <!-- ファイル名表示 -->
+        <local:FileNameConverter x:Key="FileNameConverter"/>
+        <!-- 小ボタン -->
+        <Style x:Key="SmallButton" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Background" Value="#E5E7EB"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- メインボタン -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Background" Value="#25237B"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                        CornerRadius="10"
+                        Padding="14">
+                            <ContentPresenter
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- キャンセル -->
+        <Style x:Key="CancelButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#BC533F"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                        CornerRadius="10"
+                        Padding="14">
+                            <ContentPresenter
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+    <!-- ===================== -->
+    <!-- レイアウト -->
+    <!-- ===================== -->
+    <Grid Margin="18">
+
+        <Border
+            Background="#F2F6F6"
+            CornerRadius="14"
+            Padding="18"
+            BorderBrush="#41D5DB"
+            BorderThickness="1">
+
+            <Grid>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- ヘッダー -->
+                <TextBlock
+                    Grid.Row="0"
+                    Text="PDF Translator"
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Margin="0,0,0,10"/>
+
+                <!-- 操作バー -->
+                <Grid Grid.Row="1">
+
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="160"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button
+                        Grid.Column="0"
+                        Style="{StaticResource SmallButton}"
+                        x:Name="SelectPdfButton"
+                        Content="＋ PDF"
+                        Background="#25733B"
+                        Foreground="White"
+                        FontWeight="SemiBold"
+                        TextOptions.TextRenderingMode="ClearType"
+                        TextOptions.TextFormattingMode="Display"
+                        Click="SelectPdfButton_Click" Grid.ColumnSpan="2" Margin="4,4,158,4"/>
+
+                    <TextBlock
+                        Grid.Column="2"
+                        Text="TO:"
+                        VerticalAlignment="Center"
+                        Margin="0,0,6,0"
+                        FontWeight="SemiBold"
+                        Foreground="#374151"/>
+
+                    <ComboBox
+                        Grid.Column="3"
+                        x:Name="LanguageComboBox"
+                        Height="32"
+                        SelectedIndex="0"
+                        VerticalContentAlignment="Center">
+
+                        <ComboBoxItem Content="日本語" Tag="JA"/>
+                        <ComboBoxItem Content="英語" Tag="EN"/>
+                        <ComboBoxItem Content="中国語（簡体）" Tag="ZH"/>
+                        <ComboBoxItem Content="韓国語" Tag="KO"/>
+                        <ComboBoxItem Content="フランス語" Tag="FR"/>
+                        <ComboBoxItem Content="スペイン語（ヨーロッパ）" Tag="ES"/>
+                        <ComboBoxItem Content="スペイン語（ラテンアメリカ）" Tag="ES-419"/>
+                        <ComboBoxItem Content="ドイツ語" Tag="DE"/>
+                        <ComboBoxItem Content="イタリア語" Tag="IT"/>
+                        <ComboBoxItem Content="ポルトガル語（ブラジル）" Tag="PT-BR"/>
+                        <ComboBoxItem Content="ポルトガル語（ポルトガル）" Tag="PT-PT"/>
+                        <ComboBoxItem Content="ロシア語" Tag="RU"/>
+                        <ComboBoxItem Content="インドネシア語" Tag="ID"/>
+                        <ComboBoxItem Content="アラビア語" Tag="AR"/>
+                        <ComboBoxItem Content="ヒンディー語" Tag="HI"/>
+                        <ComboBoxItem Content="タイ語" Tag="TH"/>
+
+                    </ComboBox>
+
+                </Grid>
+
+                <!-- ===================== -->
+                <!-- カード形式リスト -->
+                <!-- ===================== -->
+
+                <ListBox
+                    Grid.Row="2"
+                    x:Name="SelectedPdfList"
+                    ItemsSource="{Binding SelectedPdfPaths}"
+                    Margin="0,12,0,12"
+                    BorderBrush="#E5E7EB"
+                    BorderThickness="1"
+                    SelectionMode="Extended">
+
+                    <ListBox.ItemTemplate>
+
+                        <DataTemplate>
+
+                            <Border
+                                Margin="0"
+                                Padding="4"
+                                CornerRadius="10"
+                                BorderBrush="#E5E7EB"
+                                BorderThickness="1">
+
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#F9FAFB"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#EEF2FF"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+
+                                <Grid>
+
+                                    <!-- ファイル名 -->
+                                    <TextBlock
+                                        Text="{Binding Converter={StaticResource FileNameConverter}}"
+                                        ToolTip="{Binding}"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Yu Gothic UI"
+                                        Margin="2,0,24,0"
+                                        TextTrimming="CharacterEllipsis"/>
+
+                                    <!-- ×削除ボタン -->
+                                    <Button
+                                        Content="✕"
+                                        Width="22"
+                                        Height="22"
+                                        FontSize="12"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Background="#F3F4F6"
+                                        BorderThickness="0"
+                                        Cursor="Hand"
+                                        Click="RemoveSingleItem_Click">
+
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger
+                                                        Binding="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsMouseOver}"
+                                                        Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+
+                                    </Button>
+
+                                </Grid>
+
+                            </Border>
+
+                        </DataTemplate>
+
+                    </ListBox.ItemTemplate>
+
+                </ListBox>
+
+                <!-- オプション -->
+                <CheckBox
+                    Grid.Row="3"
+                    x:Name="SideBySideCheckBox"
+                    Content="対訳表示（原文を左）"
+                    Margin="0,6"/>
+
+                <!-- 操作ボタン -->
+                <Grid Grid.Row="4">
+
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button
+                        Grid.Column="0"
+                        x:Name="StartButton"
+                        Style="{StaticResource PrimaryButton}"
+                        Content="翻訳開始"
+                        Click="StartButton_Click"/>
+
+                    <Button
+                        Grid.Column="1"
+                        x:Name="CancelButton"
+                        Style="{StaticResource CancelButtonStyle}"
+                        Content="キャンセル"
+                        IsEnabled="False"
+                        Click="CancelButton_Click"/>
+
+                </Grid>
+
+                <!-- 進捗 -->
+                <StackPanel Grid.Row="5">
+
+                    <TextBlock
+                        x:Name="CurrentPdfText"
+                        TextAlignment="Center"
+                        Visibility="Collapsed"
+                        FontWeight="SemiBold"
+                        FontFamily="Yu Gothic UI"
+                        Margin="0,8,0,0"/>
+
+                    <ProgressBar
+                        x:Name="ProgressBar"
+                        Height="18"
+                        Margin="0,10,0,4"
+                        Visibility="Collapsed"/>
+
+                    <TextBlock
+                        x:Name="ProgressText"
+                        TextAlignment="Center"
+                        FontFamily="Yu Gothic UI"
+                        Visibility="Collapsed"/>
+
+                    <Button
+                        x:Name="UpdateApiKeyButton"
+                        Style="{StaticResource SmallButton}"
+                        Content="APIキー更新"
+                        Click="UpdateApiKeyButton_Click"
+                        HorizontalAlignment="Center"
+                        Margin="0,14,0,0"/>
+
+                </StackPanel>
+
+            </Grid>
+
+        </Border>
+
+    </Grid>
+
+</Window>
