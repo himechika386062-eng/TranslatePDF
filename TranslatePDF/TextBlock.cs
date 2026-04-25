@@ -1,4 +1,5 @@
-﻿namespace TranslatePDF
+﻿#define OCR
+namespace TranslatePDF
 {
     public class TextBlock
     {
@@ -19,7 +20,9 @@
         public bool IsImage { get; set; }
 
         public float FontSize { get; set; }
-
+#if OCR
+        public byte[] ImageBytes { get; set; }
+#endif
     }
 
     public class RectInfo

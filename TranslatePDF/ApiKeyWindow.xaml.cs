@@ -21,11 +21,11 @@ namespace TranslatePDF
             if (string.IsNullOrWhiteSpace(newKey))
             {
                 MessageBox.Show(
-                    "APIキーを入力してください",
+                    "APIキーが入力されていません",
                     "エラー",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
-                return;
+                //return;
             }
 
             try

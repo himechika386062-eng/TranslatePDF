@@ -1,32 +1,25 @@
-﻿using Emgu.CV;
+﻿#define OCR
+using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.CV.Util;
+using iText.IO.Image;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Data;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using iText.Layout;
+using iText.Layout.Element;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Text.RegularExpressions;
 
 namespace TranslatePDF.Services
 {
     public static class PdfReaderService
     {
-        public static Bitmap RenderPageToBitmap(string pdfPath, int pageIndex)
-        {
-            using var doc = PdfiumViewer.PdfDocument.Load(pdfPath);
-
-            using var img = doc.Render(
-                pageIndex - 1,
-                300,
-                300,
-                true);
-
-            return new Bitmap(img);
-        }
-
         public static List<TextBlock> ReadLines(string pdfPath)
         {
             var allParagraphs = new List<TextBlock>();
@@ -43,9 +36,26 @@ namespace TranslatePDF.Services
                 // IEventListener を使って文字座標取得
                 var listener = new MyTextEventListener();
                 var parser = new PdfCanvasProcessor(listener);
+#if OCR
+                List<TextBlock> charBlocks;
+
+                try
+                {
+                    parser.ProcessPageContent(page);
+                    charBlocks = listener.GetBlocks();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(
+                        $"Page {pageIndex} parse error: {ex.Message}");
+
+                    charBlocks = new List<TextBlock>();
+                }
+#else
                 parser.ProcessPageContent(page);
 
                 var charBlocks = listener.GetBlocks();
+#endif
 
                 using var bitmap = RenderPageToBitmap(pdfPath, pageIndex);
 
@@ -61,7 +71,68 @@ namespace TranslatePDF.Services
 
                     if (inside.Count == 0)
                     {
+#if OCR
+                        if (rect.Width > 0 && rect.Height > 0)
+                        {
+                            try
+                            {
+                                // OCR用に画像をその場で切り出す
+                                var cropRect =
+                                    new System.Drawing.Rectangle(
+                                        (int)rect.X,
+                                        (int)(
+                                            pageHeight
+                                            - rect.Y
+                                            - rect.Height),
+                                        (int)rect.Width,
+                                        (int)rect.Height);
+
+                                cropRect =
+                                    System.Drawing.Rectangle.Intersect(
+                                        cropRect,
+                                        new System.Drawing.Rectangle(
+                                            0,
+                                            0,
+                                            bitmap.Width,
+                                            bitmap.Height));
+
+                                if (cropRect.Width > 0 &&
+                                    cropRect.Height > 0)
+                                {
+                                    using var cropped =
+                                        bitmap.Clone(
+                                            cropRect,
+                                            bitmap.PixelFormat);
+
+                                    using var ms =
+                                        new MemoryStream();
+
+                                    cropped.Save(
+                                        ms,
+                                        System.Drawing.Imaging.ImageFormat.Png);
+
+                                    rect.Text =
+                                        OcrService.ReadText(
+                                            ms.ToArray());
+                                }
+                                else
+                                {
+                                    rect.Text = "";
+                                }
+                            }
+                            catch
+                            {
+                                rect.Text = "";
+                            }
+                        }
+                        else
+                        {
+                            rect.Text = "";
+                        }
+#else
                         rect.Text = "";
+#endif
+
                         continue;
                     }
 
@@ -72,9 +143,21 @@ namespace TranslatePDF.Services
                 rects.RemoveAll(r => !r.IsImage && string.IsNullOrWhiteSpace(r.Text));
 
             }       
-            return rects;//allParagraphs;
+            return rects;
         }
 
+        public static Bitmap RenderPageToBitmap(string pdfPath, int pageIndex)
+        {
+            using var doc = PdfiumViewer.PdfDocument.Load(pdfPath);
+
+            using var img = doc.Render(
+                pageIndex - 1,
+                300,
+                300,
+                true);
+
+            return new Bitmap(img);
+        }
         static bool IsInside(TextBlock text, TextBlock rect)
         {
             return
@@ -252,7 +335,8 @@ namespace TranslatePDF.Services
                 1,
                 BorderType.Default,
                 new MCvScalar());
-            /*******************DEBUG用*********************
+            //*******************DEBUG用*********************
+            /*
             SaveMatAsPdf(thresh, @"C:\\Users\\User\\Downloads\\debug_dilate1_" + pageIndex.ToString() + ".pdf");
             Process.Start(new ProcessStartInfo
             {
@@ -275,7 +359,8 @@ namespace TranslatePDF.Services
                 1,
                 BorderType.Default,
                 new MCvScalar());
-            /*******************DEBUG用*********************
+            //*******************DEBUG用*********************
+            /*
             SaveMatAsPdf(thresh, @"C:\\Users\\User\\Downloads\\debug_dilate2_" + pageIndex.ToString() + ".pdf");
             Process.Start(new ProcessStartInfo
             {
@@ -295,7 +380,8 @@ namespace TranslatePDF.Services
                 null,
                 RetrType.External,
                 ChainApproxMethod.ChainApproxSimple);
-            /*******************DEBUG用*********************
+            //*******************DEBUG用*********************
+            /*
             SaveMatAsPdf(thresh, @"C:\\Users\\User\\Downloads\\debug_dilate3_" + pageIndex.ToString() + ".pdf");
             Process.Start(new ProcessStartInfo
             {
@@ -418,7 +504,6 @@ namespace TranslatePDF.Services
                         {
                             // existing は画像 → 絶対残す
                             // current を分割
-
                             var pieces =
                                 SplitRectangle(
                                     r,
@@ -438,7 +523,6 @@ namespace TranslatePDF.Services
                         if (!existing.IsImage && current.IsImage)
                         {
                             // current は画像 → 既存テキストを分割
-
                             var pieces =
                                 SplitRectangle(
                                     existingRect,
@@ -475,7 +559,6 @@ namespace TranslatePDF.Services
                         {
                             // existing を残す
                             // current を分割
-
                             var pieces =
                                 SplitRectangle(
                                     r,
@@ -493,7 +576,6 @@ namespace TranslatePDF.Services
                         {
                             // current を残す
                             // existing を分割
-
                             var pieces =
                                 SplitRectangle(
                                     existingRect,
@@ -557,7 +639,6 @@ namespace TranslatePDF.Services
             }
 
             return final;
-            
         }
         #region
         //画像取得
@@ -593,6 +674,19 @@ namespace TranslatePDF.Services
                     - block.Height;
                 block.IsImage = true;
             }
+#if OCR
+            var pageWidth =
+    page.GetPageSize().GetWidth();
+
+            const float PAGE_IMAGE_RATIO = 0.9f;
+
+            results =
+                results
+                .Where(b =>
+                    b.Width < pageWidth * PAGE_IMAGE_RATIO &&
+                    b.Height < pageHeight * PAGE_IMAGE_RATIO)
+                .ToList();
+#endif
 
             return results;
         }
@@ -772,5 +866,45 @@ namespace TranslatePDF.Services
             return r;
         }
         #endregion
+
+        //デバッグ用関数
+        public static void SaveMatAsPdf(Mat mat, string path)
+        {
+            if (mat == null || mat.IsEmpty)
+                return;
+
+            using var ms = new MemoryStream();
+
+            // Mat → PNG
+            mat.ToImage<Emgu.CV.Structure.Gray, byte>()
+               .ToBitmap()
+               .Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+
+            var imageData =
+                ImageDataFactory.Create(ms.ToArray());
+
+            using var writer =
+                new PdfWriter(path);
+
+            using var pdf =
+                new PdfDocument(writer);
+
+            var pageSize =
+                new PageSize(
+                    imageData.GetWidth(),
+                    imageData.GetHeight());
+
+            var document =
+                new Document(pdf, pageSize);
+
+            var img =
+                new iText.Layout.Element.Image(imageData);
+
+            img.SetFixedPosition(0, 0);
+
+            document.Add(img);
+
+            document.Close();
+        }
     }
 }

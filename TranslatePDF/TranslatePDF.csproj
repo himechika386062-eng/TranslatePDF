@@ -10,6 +10,87 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="tessdata\chi_sim.traineddata" />
+    <None Remove="tessdata\chi_sim_vert.traineddata" />
+    <None Remove="tessdata\chi_tra.traineddata" />
+    <None Remove="tessdata\chi_tra_vert.traineddata" />
+    <None Remove="tessdata\eng.traineddata" />
+    <None Remove="tessdata\fra.traineddata" />
+    <None Remove="tessdata\ita.traineddata" />
+    <None Remove="tessdata\jpn.traineddata" />
+    <None Remove="tessdata\jpn_vert.traineddata" />
+    <None Remove="tessdata\kor.traineddata" />
+    <None Remove="tessdata\kor_vert.traineddata" />
+    <None Remove="tessdata\LICENSE.txt" />
+    <None Remove="tessdata\mon.traineddata" />
+    <None Remove="tessdata\nld.traineddata" />
+    <None Remove="tessdata\por.traineddata" />
+    <None Remove="tessdata\rus.traineddata" />
+    <None Remove="tessdata\spa.traineddata" />
+    <None Remove="tessdata\tha.traineddata" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="tessdata\kor.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="tessdata\chi_sim.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\chi_sim_vert.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\chi_tra.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\chi_tra_vert.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\eng.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\fra.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\ita.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\jpn.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\jpn_vert.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\kor_vert.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\LICENSE.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\mon.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\nld.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\por.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\rus.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\spa.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\tha.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Emgu.CV" Version="4.12.0.5764" />
     <PackageReference Include="Emgu.CV.Bitmap" Version="4.12.0.5764" />
     <PackageReference Include="Emgu.CV.runtime.windows" Version="4.12.0.5764" />
@@ -19,6 +100,8 @@
     <PackageReference Include="PdfiumViewer.Core" Version="1.0.4" />
     <PackageReference Include="PdfiumViewer.Native.x86_64.v8-xfa" Version="2018.4.8.256" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.2" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.7" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
   </ItemGroup>
 
   <ItemGroup>

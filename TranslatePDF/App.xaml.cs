@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿#define OCR
+using System.Text;
+using System.Windows;
 using TranslatePDF.Services;
 using TranslatePDF.Views;
 
@@ -11,6 +13,10 @@ namespace TranslatePDF
     {
         protected override void OnStartup(StartupEventArgs e)
         {
+#if OCR
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+#endif
+
             base.OnStartup(e);
 
 
