@@ -190,7 +190,7 @@
                 <ListBox
                     Grid.Row="2"
                     x:Name="SelectedPdfList"
-                    ItemsSource="{Binding SelectedPdfPaths}"
+                    ItemsSource="{Binding SelectedPdfItems}"
                     Margin="0,12,0,12"
                     BorderBrush="#E5E7EB"
                     BorderThickness="1"
@@ -219,24 +219,62 @@
                                 </Border.Style>
 
                                 <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="60" />
+                                        <ColumnDefinition Width="30" />
+                                    </Grid.ColumnDefinitions>
 
                                     <!-- ファイル名 -->
                                     <TextBlock
-                                        Text="{Binding Converter={StaticResource FileNameConverter}}"
+                                        Grid.Column="0"
+                                        Text="{Binding Path=Path, Converter={StaticResource FileNameConverter}}"
                                         ToolTip="{Binding}"
                                         VerticalAlignment="Center"
                                         FontFamily="Yu Gothic UI"
-                                        Margin="2,0,24,0"
-                                        TextTrimming="CharacterEllipsis"/>
+                                        TextTrimming="CharacterEllipsis"
+                                        Margin="2,0,6,0"/>
+                                   
 
-                                    <!-- ×削除ボタン -->
+                                    <!-- From -->
+                                    <TextBox
+                                        Grid.Column="1"
+                                        Text="{Binding FromPage}"
+                                        FontFamily="Yu Gothic UI"
+                                        Width="22"
+                                        Height="22"
+                                        VerticalAlignment="Center">
+                                    </TextBox>
+
+                                    <!-- テキスト -->
+                                    <TextBlock 
+                                        Grid.Column="1"
+                                        Text="～"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,-12.5,0">
+                                    </TextBlock>
+
+                                    <!-- To -->
+                                    <TextBox
+                                        Grid.Column="2"
+                                        Text="{Binding ToPage}"
+                                        FontFamily="Yu Gothic UI"
+                                        Width="22"
+                                        Height="22"
+                                        VerticalAlignment="Center">
+                                    </TextBox>
+
+                                    <!-- ×ボタン -->
                                     <Button
+                                        Grid.Column="3"
                                         Content="✕"
                                         Width="22"
                                         Height="22"
                                         FontSize="12"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Top"
+                                        VerticalAlignment="Center"
+                                        HorizontalAlignment="Center"
                                         Background="#F3F4F6"
                                         BorderThickness="0"
                                         Cursor="Hand"
@@ -247,8 +285,8 @@
                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                                 <Style.Triggers>
                                                     <DataTrigger
-                                                        Binding="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsMouseOver}"
-                                                        Value="True">
+                                                            Binding="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsMouseOver}"
+                                                            Value="True">
                                                         <Setter Property="Visibility" Value="Visible"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>

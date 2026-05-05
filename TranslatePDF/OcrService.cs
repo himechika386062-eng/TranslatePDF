@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using Tesseract;
 
 namespace TranslatePDF.Services
@@ -10,37 +11,38 @@ namespace TranslatePDF.Services
 
         static OcrService()
         {
-            var tessPath =
-                Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    "tessdata");
+            var tessPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
 
-            engine =
-                new TesseractEngine(
-                    tessPath,
-                    "eng+fra+spa+nld+ita+rus+mon+por+tha+chi_sim+chi_sim_vert+chi_tra+chi_tra_vert+jpn+jpn_vert+kor+kor_vert",
-                    EngineMode.Default);
+            engine = new TesseractEngine(
+                tessPath,
+                "eng",
+                EngineMode.Default);
         }
 
-        public static string ReadText(
-            byte[] imageBytes)
+        /// <summary>
+        /// 画像からテキストを読み取ります。
+        /// </summary>
+        /// <param name="imageBytes">画像データ</param>
+        /// <param name="mode">PageSegMode (6: 段落, 7: 一行, 3: 自動)</param>
+        public static string ReadText(byte[] imageBytes, int mode = 6)
         {
             try
             {
-                using var ms =
-                    new MemoryStream(imageBytes);
+                using var img = Pix.LoadFromMemory(imageBytes);
 
-                using var img =
-                    Pix.LoadFromMemory(
-                        ms.ToArray());
+                // (PageSegMode)mode で int から列挙型へ変換
+                using var page = engine.Process(img, (PageSegMode)mode);
 
-                using var page =
-                    engine.Process(img);
+                var text = page.GetText();
+                if (string.IsNullOrWhiteSpace(text)) return "";
 
-                return page.GetText();
+                // OCR特有のゴミ（連続する記号など）を簡易クリーニング
+                text = Regex.Replace(text, @"[|¦_]{2,}", "");
+                return text?.Trim() ?? "";
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"OCR Error: {ex.Message}");
                 return "";
             }
         }

@@ -1,4 +1,5 @@
 ﻿//#define SKIPTRANSLATE
+//#define OCR
 using iText.IO.Font;
 using iText.Kernel.Font;
 using iText.Kernel.Pdf;
@@ -18,11 +19,11 @@ namespace TranslatePDF
     public partial class MainWindow : Window
     {
         private CancellationTokenSource? _cts;
-        private ObservableCollection<string> selectedPdfPaths = new ObservableCollection<string>();
-
+        public ObservableCollection<PdfItem> SelectedPdfItems { get; set; } = new ObservableCollection<PdfItem>();
         public MainWindow()
         {
             InitializeComponent();
+            DataContext = this;
             SideBySideCheckBox.IsChecked = Properties.Settings.Default.SideBySide;
         }
 
@@ -37,10 +38,18 @@ namespace TranslatePDF
             {
                 foreach (var pdf in dialog.FileNames)
                 {
-                    if (!selectedPdfPaths.Contains(pdf))
+                    if (!SelectedPdfItems.Any(x => x.Path == pdf))
                     {
-                        selectedPdfPaths.Add(pdf);
-                        SelectedPdfList.Items.Add(pdf);
+                        using var document = UglyToad.PdfPig.PdfDocument.Open(pdf);
+                        int pageCount = document.NumberOfPages;
+
+                        SelectedPdfItems.Add(new PdfItem
+                        {
+                            Path = pdf,
+                            FromPage = "1",
+                            ToPage = pageCount.ToString(),
+                            TotalPage = pageCount.ToString()
+                        });
                     }
                 }
             }
@@ -49,7 +58,7 @@ namespace TranslatePDF
         // 翻訳開始ボタン
         private async void StartButton_Click(object sender, RoutedEventArgs e)
         {
-            if (selectedPdfPaths.Count == 0)
+            if (SelectedPdfItems.Count == 0)
             {
                 MessageBox.Show("PDFを選択してください");
                 return;
@@ -70,19 +79,21 @@ namespace TranslatePDF
             CurrentPdfText.Visibility = Visibility.Visible;
             ProgressBar.Visibility = Visibility.Visible;
             ProgressText.Visibility = Visibility.Visible;
-            int totalPdfCount = selectedPdfPaths.Count;
+            int totalPdfCount = SelectedPdfItems.Count;
             int finishedPdfCount = 0;
             try
             {
-                foreach (var pdfPath in selectedPdfPaths.ToList())
+                foreach (var item in SelectedPdfItems.ToList())
                 {
+                    var pdfPath = item.Path;
+                    int from = int.TryParse(item.FromPage, out var f) ? f : 1;
+                    int to = int.TryParse(item.ToPage, out var t) ? t : int.MaxValue;
                     CurrentPdfText.Visibility = Visibility.Visible;
-
                     CurrentPdfText.Text =
                         $"PDF {finishedPdfCount + 1}/{totalPdfCount} : {Path.GetFileName(pdfPath)} を翻訳中";
                     await Task.Yield();
 
-                    var paragraphs = PdfReaderService.ReadLines(pdfPath);
+                    var paragraphs = PdfReaderService.ReadLines(pdfPath, from, to);
 #if SKIPTRANSLATE
 #else
                     ProgressBar.Minimum = 0;
@@ -179,7 +190,9 @@ namespace TranslatePDF
                         pdfPath,
                         targetLang,
                         textBlocks,
-                        SideBySideCheckBox.IsChecked == true);
+                        SideBySideCheckBox.IsChecked == true,
+                        from,
+                        to);
 
                     Process.Start(new ProcessStartInfo
                     {
@@ -189,10 +202,9 @@ namespace TranslatePDF
                     finishedPdfCount++;
                     Dispatcher.Invoke(() =>
                     {
-                        selectedPdfPaths.Remove(pdfPath);
-                        SelectedPdfList.Items.Remove(pdfPath);
+                        SelectedPdfItems.Remove(item);
                     });
-                    if (SelectedPdfList.Items.Count == 0)
+                    if (SelectedPdfItems.Count == 0)
                     {
                         ProgressText.Text = "すべて完了";
                     }
@@ -245,20 +257,26 @@ namespace TranslatePDF
 
             var pdfs = files
                 .Where(f => Path.GetExtension(f).ToLower() == ".pdf");
-
             foreach (var pdf in pdfs)
             {
-                if (!selectedPdfPaths.Contains(pdf))
+                if (!SelectedPdfItems.Any(x => x.Path == pdf))
                 {
-                    selectedPdfPaths.Add(pdf);
-                    SelectedPdfList.Items.Add(pdf);
+                    using var document = UglyToad.PdfPig.PdfDocument.Open(pdf);
+                    int pageCount = document.NumberOfPages;
+
+                    SelectedPdfItems.Add(new PdfItem
+                    {
+                        Path = pdf,
+                        FromPage = "1",
+                        ToPage = pageCount.ToString()
+                    });
                 }
             }
         }
         #endregion
 
        
-        public static string CreatePdfWithLayoutRects(string originalPdfPath,string targetLang, List<TextBlock> textBlocks, bool sideBySide)
+        public static string CreatePdfWithLayoutRects(string originalPdfPath,string targetLang, List<TextBlock> textBlocks, bool sideBySide,int from, int to)
         {
             string output =　sideBySide ?
                 Path.Combine(
@@ -272,10 +290,12 @@ namespace TranslatePDF
 
             using var reader = new PdfReader(originalPdfPath);
             using var writer = new PdfWriter(output);
-            using var srcPdf = new PdfDocument(reader);
-            using var destPdf = new PdfDocument(writer);
+            using var srcPdf = new iText.Kernel.Pdf.PdfDocument(reader);
+            using var destPdf = new iText.Kernel.Pdf.PdfDocument(writer);
 
-            int pageCount = srcPdf.GetNumberOfPages();
+            int totalPages = srcPdf.GetNumberOfPages();
+            int start = Math.Max(0, from);
+            int end = Math.Min(totalPages - 1, to);
             var fontPath = GetJapaneseFontPath();
 
             var font =
@@ -284,11 +304,11 @@ namespace TranslatePDF
                     PdfEncodings.IDENTITY_H,
                     PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
 
-            for (int pageIndex = 1; pageIndex <= pageCount; pageIndex++)
+            for (int pageIndex = 1; pageIndex <= totalPages; pageIndex++)
             {
                 var sourcePage = srcPdf.GetPage(pageIndex);
                 var originalSize = sourcePage.GetPageSize();
-
+                bool isTarget = pageIndex >= start && pageIndex <= end;
                 //--------------------------------------------------
                 // ページサイズ決定
                 //--------------------------------------------------
@@ -325,6 +345,11 @@ namespace TranslatePDF
                     pageCopy,
                     0,
                     0);
+                if (!isTarget)
+                {
+                    continue;
+                }
+
                 if (sideBySide)
                 {
                     canvasPdf.AddXObjectAt(
@@ -538,10 +563,9 @@ namespace TranslatePDF
 
         private void RemoveSingleItem_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.DataContext is string item)
+            if (sender is Button btn && btn.DataContext is PdfItem item)
             {
-                selectedPdfPaths.Remove(item);
-                SelectedPdfList.Items.Remove(item);
+                SelectedPdfItems.Remove(item);
             }
         }
         protected override void OnClosing(CancelEventArgs e)

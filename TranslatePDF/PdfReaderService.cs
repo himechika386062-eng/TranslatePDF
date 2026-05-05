@@ -1,4 +1,4 @@
-﻿#define OCR
+﻿//#define OCR
 using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
@@ -10,29 +10,35 @@ using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Data;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using iText.Layout;
-using iText.Layout.Element;
-using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Text.RegularExpressions;
 
 namespace TranslatePDF.Services
 {
     public static class PdfReaderService
     {
-        public static List<TextBlock> ReadLines(string pdfPath)
+        public static List<TextBlock> ReadLines(string pdfPath, int from, int to)
         {
             var allParagraphs = new List<TextBlock>();
             var rects = new List<TextBlock>();
             using var pdf = new PdfDocument(new PdfReader(pdfPath));
+            int totalPages = pdf.GetNumberOfPages();
 
-            for (int pageIndex = 1; pageIndex <= pdf.GetNumberOfPages(); pageIndex++)
+            int startPage = Math.Max(1, from);
+            int endPage = Math.Min(totalPages, to);
+            if (startPage > endPage)
+                return new List<TextBlock>();
+
+            for (int pageIndex = startPage; pageIndex <= endPage; pageIndex++)
             {
                 var lines = new List<TextBlock>();
                 var page = pdf.GetPage(pageIndex);
-                iText.Kernel.Geom.Rectangle pageSize = page.GetPageSize();
-                float pageWidth = pageSize.GetWidth();
-                float pageHeight = pageSize.GetHeight();
+                var crop = page.GetCropBox();
+
+                float cropX = crop.GetX();
+                float cropY = crop.GetY();
+                float pdfHeight = crop.GetHeight();
+
                 // IEventListener を使って文字座標取得
                 var listener = new MyTextEventListener();
                 var parser = new PdfCanvasProcessor(listener);
@@ -53,8 +59,14 @@ namespace TranslatePDF.Services
                 }
 #else
                 parser.ProcessPageContent(page);
-
                 var charBlocks = listener.GetBlocks();
+
+                foreach (var b in charBlocks)
+                {
+                    b.X -= cropX;
+                    b.Y -= cropY;
+                    if (b.Height > 20f) b.Height *= 0.7f;
+                }
 #endif
 
                 using var bitmap = RenderPageToBitmap(pdfPath, pageIndex);
@@ -63,6 +75,7 @@ namespace TranslatePDF.Services
 
                 foreach (var rect in rects.Where(r => r.PageIndex == pageIndex - 1))
                 {
+                    
                     var inside = charBlocks
                         .Where(cb => IsInside(cb, rect))
                         .OrderBy(cb => cb.Y)
@@ -103,17 +116,21 @@ namespace TranslatePDF.Services
                                         bitmap.Clone(
                                             cropRect,
                                             bitmap.PixelFormat);
-
+                                    /*
                                     using var ms =
                                         new MemoryStream();
 
                                     cropped.Save(
                                         ms,
                                         System.Drawing.Imaging.ImageFormat.Png);
-
+                                    
                                     rect.Text =
                                         OcrService.ReadText(
                                             ms.ToArray());
+                                    */
+                                    //リファイン
+                                    byte[] refinedImageData = PrepareImageForOcr(cropped);
+                                    rect.Text = OcrService.ReadText(refinedImageData);
                                 }
                                 else
                                 {
@@ -132,7 +149,6 @@ namespace TranslatePDF.Services
 #else
                         rect.Text = "";
 #endif
-
                         continue;
                     }
 
@@ -141,23 +157,36 @@ namespace TranslatePDF.Services
                     rect.Text = lineBlock.Text;
                 }
                 rects.RemoveAll(r => !r.IsImage && string.IsNullOrWhiteSpace(r.Text));
-
             }       
             return rects;
         }
 
         public static Bitmap RenderPageToBitmap(string pdfPath, int pageIndex)
         {
+            using var pdf = new PdfDocument(new PdfReader(pdfPath));
+            var page = pdf.GetPage(pageIndex);
+            var pageSize = page.GetPageSize();
+
+            float pdfWidth = pageSize.GetWidth();
+            float pdfHeight = pageSize.GetHeight();
+
+            float dpi = 300f;
+            float scale = dpi / 72f;
+
+            int width = (int)Math.Round(pdfWidth * scale);
+            int height = (int)Math.Round(pdfHeight * scale);
+
             using var doc = PdfiumViewer.PdfDocument.Load(pdfPath);
 
             using var img = doc.Render(
                 pageIndex - 1,
-                300,
-                300,
-                true);
+                width,
+                height,
+                PdfiumViewer.PdfRenderFlags.Annotations);
 
             return new Bitmap(img);
         }
+
         static bool IsInside(TextBlock text, TextBlock rect)
         {
             return
@@ -166,59 +195,10 @@ namespace TranslatePDF.Services
                 text.X + text.Width <= rect.X + rect.Width &&
                 text.Y + text.Height <= rect.Y + rect.Height;
         }
-        
-
-        //注釈判定
-        private static bool IsNumberLike(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return false;
-
-            text = text.Trim();
-
-            // 数字のみ
-            if (Regex.IsMatch(text, @"^\d+$"))
-                return true;
-
-            // (23)
-            if (Regex.IsMatch(text, @"^\(\d+\)$"))
-                return true;
-
-            // 23.
-            if (Regex.IsMatch(text, @"^\d+\.$"))
-                return true;
-
-            // 1)
-            if (Regex.IsMatch(text, @"^\d+\)$"))
-                return true;
-
-            // (a)
-            if (Regex.IsMatch(text, @"^\([a-zA-Z]\)$"))
-                return true;
-
-            // a)
-            if (Regex.IsMatch(text, @"^[a-zA-Z]\)$"))
-                return true;
-
-            // A.
-            if (Regex.IsMatch(text, @"^[A-Za-z]\.$"))
-                return true;
-
-            // (i) (ii) (iv) ローマ数字
-            if (Regex.IsMatch(text, @"^\(([ivxlcdmIVXLCDM]+)\)$"))
-                return true;
-
-            // i. ii. iv.
-            if (Regex.IsMatch(text, @"^[ivxlcdmIVXLCDM]+\.$"))
-                return true;
-
-            return false;
-        }
-
         private static TextBlock MergeLine(List<TextBlock> chars)
         {
             var filtered = chars
-                .Where(c => !IsNumberLike(c.Text))
+                //.Where(c => !IsNumberLike(c.Text))
                 .ToList();
 
             // もし全部除外されたら安全に戻る
@@ -386,11 +366,11 @@ namespace TranslatePDF.Services
             Process.Start(new ProcessStartInfo
             {
                 FileName = @"C:\Users\User\Downloads\debug_dilate3_" + pageIndex.ToString() + ".pdf",
-                UseShellExecute = true   // これがないと開けない
+                UseShellExecute = true
             });
             */
             int pageArea = bitmap.Width * bitmap.Height;
-            List<System.Drawing.Rectangle> rects = new List<System.Drawing.Rectangle>();
+            //List<System.Drawing.Rectangle> rects = new List<System.Drawing.Rectangle>();
             for (int i = 0; i < contours.Size; i++)
             {
                 var r = CvInvoke.BoundingRectangle(contours[i]);
@@ -407,13 +387,6 @@ namespace TranslatePDF.Services
 
                 if (aspect > 20  || aspect <0.05)
                     continue;
-
-                rects.Add(new System.Drawing.Rectangle(
-                    r.X,
-                    r.Y,//長方形は左上が支点
-                    r.Width,
-                    r.Height
-                ));
 
                 results.Add(new TextBlock
                 {
@@ -451,7 +424,6 @@ namespace TranslatePDF.Services
             float avgHeight = sorted.Average(b => b.Height);
 
             var final = new List<TextBlock>();
-            List<System.Drawing.Rectangle> rects2 = new List<System.Drawing.Rectangle>();
             
             for (int i = 0; i < sorted.Count; i++)
             {
@@ -628,8 +600,34 @@ namespace TranslatePDF.Services
                         });
                 }
             }
+            //*******************DEBUG用*********************
+            /*
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                using var pen = new Pen(Color.Red, 2);
 
-            //座標変換
+                foreach (var b in final)
+                {
+                    g.DrawRectangle(
+                        pen,
+                        b.X,
+                        b.Y,
+                        b.Width,
+                        b.Height);
+                }
+            }
+            bitmap.Save($@"C:\Users\User\Downloads\debug_rect_{pageIndex}.png");
+            string path = @"C:\Users\User\Downloads\debug_rect_" + pageIndex + ".pdf";
+            using var matWithRects = bitmap.ToMat();
+            SaveMatAsPdf(matWithRects, path);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+            */
+            /////////////////////////ここまで//////////////////////
+            //座標変換  
             foreach (var block in final)
             {
                 block.Y =
@@ -641,6 +639,7 @@ namespace TranslatePDF.Services
             return final;
         }
         #region
+
         //画像取得
         public static List<TextBlock> DetectImageRects(
             string pdfPath,
@@ -864,6 +863,76 @@ namespace TranslatePDF.Services
                 return System.Drawing.Rectangle.Empty;
 
             return r;
+        }
+        #endregion
+
+        // OCR精度向上のための画像リファイニング処理
+        #region
+        private static byte[] PrepareImageForOcr(Bitmap cropped)
+        {
+            using var src = cropped.ToMat();
+            using var resized = new Mat();
+            using var gray = new Mat();
+            using var thresh = new Mat();
+
+            // 1. 拡大 (3倍)
+            CvInvoke.Resize(src, resized, new System.Drawing.Size(), 3.0, 3.0, Inter.Cubic);
+
+            // 2. グレースケール & コントラスト最適化
+            CvInvoke.CvtColor(resized, gray, ColorConversion.Bgr2Gray);
+            CvInvoke.CLAHE(gray, 4.0, new System.Drawing.Size(8, 8), gray);
+
+            // 3. 適応的二値化
+            CvInvoke.AdaptiveThreshold(gray, thresh, 255,
+                AdaptiveThresholdType.GaussianC, ThresholdType.Binary, 31, 10);
+
+            // 4. ノイズ・罫線除去
+            using (var contours = new VectorOfVectorOfPoint())
+            {
+                CvInvoke.FindContours(thresh, contours, null, RetrType.External, ChainApproxMethod.ChainApproxSimple);
+                for (int i = 0; i < contours.Size; i++)
+                {
+                    var r = CvInvoke.BoundingRectangle(contours[i]);
+                    double area = CvInvoke.ContourArea(contours[i]);
+                    // 小さすぎるゴミ or 極端に細長い線(罫線)を白で塗りつぶす
+                    if (area < 15 || r.Width > r.Height * 10 || r.Height > r.Width * 10)
+                    {
+                        CvInvoke.DrawContours(thresh, contours, i, new MCvScalar(255), -1);
+                    }
+                }
+            }
+
+            // 5. 傾き補正 (Deskewing)
+            using (var inverted = new Mat())
+            using (var points = new VectorOfPoint())
+            {
+                CvInvoke.BitwiseNot(thresh, inverted);
+                CvInvoke.FindNonZero(inverted, points);
+                if (points.Size > 0)
+                {
+                    var box = CvInvoke.MinAreaRect(points);
+                    float angle = box.Angle;
+                    if (box.Size.Width < box.Size.Height) angle += 90;
+
+                    if (Math.Abs(angle) > 0.5 && Math.Abs(angle) < 45)
+                    {
+                        var center = new System.Drawing.PointF(thresh.Width / 2f, thresh.Height / 2f);
+                        using var rotMat = new Mat();
+                        CvInvoke.GetRotationMatrix2D(center, angle, 1.0, rotMat);
+                        CvInvoke.WarpAffine(thresh, thresh, rotMat, thresh.Size, Inter.Linear, Warp.Default, BorderType.Constant, new MCvScalar(255));
+                    }
+                }
+            }
+
+            // 6. かすれ補正 & 最終デノイズ
+            using var kernel = new Mat(2, 2, DepthType.Cv8U, 1);
+            kernel.SetTo(new MCvScalar(1));
+            CvInvoke.Erode(thresh, thresh, kernel, new System.Drawing.Point(-1, -1), 1, BorderType.Default, new MCvScalar());
+            CvInvoke.MedianBlur(thresh, thresh, 3);
+
+            using var ms = new MemoryStream();
+            thresh.ToBitmap().Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
         }
         #endregion
 

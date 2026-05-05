@@ -99,6 +99,7 @@
     <PackageReference Include="itext7.font-asian" Version="9.5.0" />
     <PackageReference Include="PdfiumViewer.Core" Version="1.0.4" />
     <PackageReference Include="PdfiumViewer.Native.x86_64.v8-xfa" Version="2018.4.8.256" />
+    <PackageReference Include="PdfPig" Version="0.1.14" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.2" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.7" />
     <PackageReference Include="Tesseract" Version="5.2.0" />

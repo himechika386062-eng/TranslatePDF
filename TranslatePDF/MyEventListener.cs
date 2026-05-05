@@ -5,7 +5,7 @@ using iText.Kernel.Pdf.Canvas.Parser.Listener;
 
 public class TextBlock
 {
-    public string Text;
+    //public string Text;
     public float X, Y, Width, Height;
 }
 

@@ -24,10 +24,4 @@ namespace TranslatePDF
         public byte[] ImageBytes { get; set; }
 #endif
     }
-
-    public class RectInfo
-    {
-        public int PageIndex { get; set; }
-        public System.Drawing.Rectangle Rect { get; set; }
-    }
 }
