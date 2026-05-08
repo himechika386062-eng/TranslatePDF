@@ -10,8 +10,16 @@ using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Data;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using iText.Layout;
+using iText.StyledXmlParser.Jsoup.Parser;
+using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Windows;
+using TranslatePDF.Services;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Menu;
 
 namespace TranslatePDF.Services
 {
@@ -31,7 +39,55 @@ namespace TranslatePDF.Services
 
             for (int pageIndex = startPage; pageIndex <= endPage; pageIndex++)
             {
-                var lines = new List<TextBlock>();
+#if OCR
+                var page = pdf.GetPage(pageIndex);
+                var crop = page.GetCropBox();
+
+                float cropX = crop.GetX();
+                float cropY = crop.GetY();
+
+                List<TextBlock> charBlocks = null;
+                Bitmap bitmap = null;
+
+                try
+                {
+                    var listener = new MyTextEventListener();
+                    var parser = new PdfCanvasProcessor(listener);
+                    parser.ProcessPageContent(page);
+                    charBlocks = listener.GetBlocks();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(ex.Message);
+                    charBlocks = null;
+                }
+
+                bool hasValidText =
+                    charBlocks != null &&
+                    charBlocks.Count > 0 &&
+                    charBlocks.Any(b => !string.IsNullOrWhiteSpace(b.Text));
+
+                if (!hasValidText)//OCR
+                {
+                    bitmap = RenderPageToBitmap(pdfPath, pageIndex);
+                    rects.AddRange(DetectTextRects(bitmap, pageIndex, pdfPath));
+                    //bitmap = RefineBitmap(bitmap);
+
+                    var ocr = OcrService.ReadOcrText(bitmap);
+
+                    //var ch = ConvertOcrToBlocks(ocr, pageIndex);
+                    //追加
+                }
+                //座標補正
+                /*
+                foreach (var b in charBlocks)
+                {
+                    b.X -= cropX;
+                    b.Y -= cropY;
+                    if (b.Height > 20f) b.Height *= 0.7f;
+                }
+                */
+#else
                 var page = pdf.GetPage(pageIndex);
                 var crop = page.GetCropBox();
 
@@ -42,37 +98,22 @@ namespace TranslatePDF.Services
                 // IEventListener を使って文字座標取得
                 var listener = new MyTextEventListener();
                 var parser = new PdfCanvasProcessor(listener);
-#if OCR
-                List<TextBlock> charBlocks;
 
-                try
-                {
-                    parser.ProcessPageContent(page);
-                    charBlocks = listener.GetBlocks();
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine(
-                        $"Page {pageIndex} parse error: {ex.Message}");
-
-                    charBlocks = new List<TextBlock>();
-                }
-#else
                 parser.ProcessPageContent(page);
                 var charBlocks = listener.GetBlocks();
 
+                //座標補正
                 foreach (var b in charBlocks)
                 {
                     b.X -= cropX;
                     b.Y -= cropY;
                     if (b.Height > 20f) b.Height *= 0.7f;
                 }
-#endif
 
                 using var bitmap = RenderPageToBitmap(pdfPath, pageIndex);
 
                 rects.AddRange(DetectTextRects(bitmap, pageIndex, pdfPath));
-
+#endif
                 foreach (var rect in rects.Where(r => r.PageIndex == pageIndex - 1))
                 {
                     
@@ -84,75 +125,12 @@ namespace TranslatePDF.Services
 
                     if (inside.Count == 0)
                     {
-#if OCR
-                        if (rect.Width > 0 && rect.Height > 0)
-                        {
-                            try
-                            {
-                                // OCR用に画像をその場で切り出す
-                                var cropRect =
-                                    new System.Drawing.Rectangle(
-                                        (int)rect.X,
-                                        (int)(
-                                            pageHeight
-                                            - rect.Y
-                                            - rect.Height),
-                                        (int)rect.Width,
-                                        (int)rect.Height);
 
-                                cropRect =
-                                    System.Drawing.Rectangle.Intersect(
-                                        cropRect,
-                                        new System.Drawing.Rectangle(
-                                            0,
-                                            0,
-                                            bitmap.Width,
-                                            bitmap.Height));
-
-                                if (cropRect.Width > 0 &&
-                                    cropRect.Height > 0)
-                                {
-                                    using var cropped =
-                                        bitmap.Clone(
-                                            cropRect,
-                                            bitmap.PixelFormat);
-                                    /*
-                                    using var ms =
-                                        new MemoryStream();
-
-                                    cropped.Save(
-                                        ms,
-                                        System.Drawing.Imaging.ImageFormat.Png);
-                                    
-                                    rect.Text =
-                                        OcrService.ReadText(
-                                            ms.ToArray());
-                                    */
-                                    //リファイン
-                                    byte[] refinedImageData = PrepareImageForOcr(cropped);
-                                    rect.Text = OcrService.ReadText(refinedImageData);
-                                }
-                                else
-                                {
-                                    rect.Text = "";
-                                }
-                            }
-                            catch
-                            {
-                                rect.Text = "";
-                            }
-                        }
-                        else
-                        {
-                            rect.Text = "";
-                        }
-#else
                         rect.Text = "";
-#endif
                         continue;
                     }
 
-                    var lineBlock = MergeLine(inside);
+                    var lineBlock = MergeLine(inside, rect);
 
                     rect.Text = lineBlock.Text;
                 }
@@ -160,6 +138,42 @@ namespace TranslatePDF.Services
             }       
             return rects;
         }
+
+
+        #region OCR
+#if OCR
+        //テキスト取得
+        private static List<TextBlock> ConvertOcrToBlocks(List<OcrItem> ocrItems, int pageIndex)
+        {
+            var list = new List<TextBlock>();
+
+            foreach (var item in ocrItems)
+            {
+                if (item.Box == null || item.Box.Count == 0)
+                    continue;
+
+                float minX = item.Box.Min(p => p[0]);
+                float minY = item.Box.Min(p => p[1]);
+                float maxX = item.Box.Max(p => p[0]);
+                float maxY = item.Box.Max(p => p[1]);
+
+                list.Add(new TextBlock
+                {
+                    PageIndex = pageIndex - 1,
+                    Text = item.Text,
+                    X = minX,
+                    Y = minY,
+                    Width = maxX - minX,
+                    Height = maxY - minY,
+                    FontSize = 0,
+                    IsImage = false
+                });
+            }
+
+            return list;
+        }
+#endif
+#endregion
 
         public static Bitmap RenderPageToBitmap(string pdfPath, int pageIndex)
         {
@@ -195,10 +209,9 @@ namespace TranslatePDF.Services
                 text.X + text.Width <= rect.X + rect.Width &&
                 text.Y + text.Height <= rect.Y + rect.Height;
         }
-        private static TextBlock MergeLine(List<TextBlock> chars)
+        private static TextBlock MergeLine(List<TextBlock> chars, TextBlock rect)
         {
             var filtered = chars
-                //.Where(c => !IsNumberLike(c.Text))
                 .ToList();
 
             // もし全部除外されたら安全に戻る
@@ -233,20 +246,29 @@ namespace TranslatePDF.Services
                 {
                     var prev = ordered[i - 1];
 
-                    // ===== 縦方向 gap =====
-
                     float vGap = prev.Y - current.Y;
+                    float hGap = Math.Abs(
+                        current.X
+                        - (prev.X + prev.Width));
+
+                    // ===== 縦方向 gap =====
 
                     if (vGap > avgHeight * 1.5f)
                     {
                         sb.Append("\n");
                     }
 
-                    // ===== 横方向 gap =====
+                    // ===== 段落 =====
 
-                    float hGap = Math.Abs(
-                        current.X
-                        - (prev.X + prev.Width));
+                    if (Math.Abs((rect.X+rect.Width) - (prev.X + prev.Width)) > minWidth * 20.0f)
+                    {
+                        if (current.X < prev.X)
+                        {
+                            sb.Append("\n");
+                        }
+                    }
+
+                    // ===== 横方向 gap =====
 
                     if (hGap > minWidth * 0.6f)
                     {
@@ -373,7 +395,26 @@ namespace TranslatePDF.Services
             //List<System.Drawing.Rectangle> rects = new List<System.Drawing.Rectangle>();
             for (int i = 0; i < contours.Size; i++)
             {
+#if OCR
+                var rotRect = CvInvoke.MinAreaRect(contours[i]);
+                float angle = rotRect.Angle;
+                float an2 = Math.Abs(angle - 5) > 10 ? 0 : 5;
+                PointF[] pts = rotRect.GetVertices();
+
+                float minX = pts.Min(p => p.X);
+                float maxX = pts.Max(p => p.X);
+                float minY = pts.Min(p => p.Y);
+                float maxY = pts.Max(p => p.Y);
+
+                int x = (int)Math.Floor(minX);
+                int y = (int)Math.Floor(minY);
+                int w = (int)Math.Ceiling(maxX - minX);
+                int h = (int)Math.Ceiling(maxY - minY);
+
+                var r = new System.Drawing.Rectangle(x,y,w,h);
+#else
                 var r = CvInvoke.BoundingRectangle(contours[i]);
+#endif
 
                 int area = r.Width * r.Height;
 
@@ -402,13 +443,15 @@ namespace TranslatePDF.Services
             // 6. 画像の情報を取得
             // =========================
             float pageHeight = bitmap.Height;
+#if OCR
+#else
             var imageBlocks =
                 DetectImageRects(
                     pdfPath,
                     pageIndex,
                     pageHeight);
             results.AddRange(imageBlocks);
-
+#endif
             // =========================
             // 7. 上から順に並べて干渉をチェックする
             // =========================
@@ -601,7 +644,7 @@ namespace TranslatePDF.Services
                 }
             }
             //*******************DEBUG用*********************
-            /*
+            
             using (var g = Graphics.FromImage(bitmap))
             {
                 using var pen = new Pen(Color.Red, 2);
@@ -625,7 +668,7 @@ namespace TranslatePDF.Services
                 FileName = path,
                 UseShellExecute = true
             });
-            */
+            
             /////////////////////////ここまで//////////////////////
             //座標変換  
             foreach (var block in final)
@@ -638,9 +681,8 @@ namespace TranslatePDF.Services
 
             return final;
         }
+        //Image取得
         #region
-
-        //画像取得
         public static List<TextBlock> DetectImageRects(
             string pdfPath,
             int pageIndex,
@@ -673,20 +715,6 @@ namespace TranslatePDF.Services
                     - block.Height;
                 block.IsImage = true;
             }
-#if OCR
-            var pageWidth =
-    page.GetPageSize().GetWidth();
-
-            const float PAGE_IMAGE_RATIO = 0.9f;
-
-            results =
-                results
-                .Where(b =>
-                    b.Width < pageWidth * PAGE_IMAGE_RATIO &&
-                    b.Height < pageHeight * PAGE_IMAGE_RATIO)
-                .ToList();
-#endif
-
             return results;
         }
         
@@ -748,8 +776,9 @@ namespace TranslatePDF.Services
                 };
         }
         #endregion
-        #region
+
         //以下、短形の干渉に関して
+        #region
         static float OverlapRatio(System.Drawing.Rectangle a, System.Drawing.Rectangle b)
         {
             var inter =
@@ -865,78 +894,8 @@ namespace TranslatePDF.Services
             return r;
         }
         #endregion
-
-        // OCR精度向上のための画像リファイニング処理
-        #region
-        private static byte[] PrepareImageForOcr(Bitmap cropped)
-        {
-            using var src = cropped.ToMat();
-            using var resized = new Mat();
-            using var gray = new Mat();
-            using var thresh = new Mat();
-
-            // 1. 拡大 (3倍)
-            CvInvoke.Resize(src, resized, new System.Drawing.Size(), 3.0, 3.0, Inter.Cubic);
-
-            // 2. グレースケール & コントラスト最適化
-            CvInvoke.CvtColor(resized, gray, ColorConversion.Bgr2Gray);
-            CvInvoke.CLAHE(gray, 4.0, new System.Drawing.Size(8, 8), gray);
-
-            // 3. 適応的二値化
-            CvInvoke.AdaptiveThreshold(gray, thresh, 255,
-                AdaptiveThresholdType.GaussianC, ThresholdType.Binary, 31, 10);
-
-            // 4. ノイズ・罫線除去
-            using (var contours = new VectorOfVectorOfPoint())
-            {
-                CvInvoke.FindContours(thresh, contours, null, RetrType.External, ChainApproxMethod.ChainApproxSimple);
-                for (int i = 0; i < contours.Size; i++)
-                {
-                    var r = CvInvoke.BoundingRectangle(contours[i]);
-                    double area = CvInvoke.ContourArea(contours[i]);
-                    // 小さすぎるゴミ or 極端に細長い線(罫線)を白で塗りつぶす
-                    if (area < 15 || r.Width > r.Height * 10 || r.Height > r.Width * 10)
-                    {
-                        CvInvoke.DrawContours(thresh, contours, i, new MCvScalar(255), -1);
-                    }
-                }
-            }
-
-            // 5. 傾き補正 (Deskewing)
-            using (var inverted = new Mat())
-            using (var points = new VectorOfPoint())
-            {
-                CvInvoke.BitwiseNot(thresh, inverted);
-                CvInvoke.FindNonZero(inverted, points);
-                if (points.Size > 0)
-                {
-                    var box = CvInvoke.MinAreaRect(points);
-                    float angle = box.Angle;
-                    if (box.Size.Width < box.Size.Height) angle += 90;
-
-                    if (Math.Abs(angle) > 0.5 && Math.Abs(angle) < 45)
-                    {
-                        var center = new System.Drawing.PointF(thresh.Width / 2f, thresh.Height / 2f);
-                        using var rotMat = new Mat();
-                        CvInvoke.GetRotationMatrix2D(center, angle, 1.0, rotMat);
-                        CvInvoke.WarpAffine(thresh, thresh, rotMat, thresh.Size, Inter.Linear, Warp.Default, BorderType.Constant, new MCvScalar(255));
-                    }
-                }
-            }
-
-            // 6. かすれ補正 & 最終デノイズ
-            using var kernel = new Mat(2, 2, DepthType.Cv8U, 1);
-            kernel.SetTo(new MCvScalar(1));
-            CvInvoke.Erode(thresh, thresh, kernel, new System.Drawing.Point(-1, -1), 1, BorderType.Default, new MCvScalar());
-            CvInvoke.MedianBlur(thresh, thresh, 3);
-
-            using var ms = new MemoryStream();
-            thresh.ToBitmap().Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            return ms.ToArray();
-        }
-        #endregion
-
         //デバッグ用関数
+        #region
         public static void SaveMatAsPdf(Mat mat, string path)
         {
             if (mat == null || mat.IsEmpty)
@@ -975,5 +934,6 @@ namespace TranslatePDF.Services
 
             document.Close();
         }
+        #endregion
     }
 }

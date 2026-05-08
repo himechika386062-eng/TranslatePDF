@@ -295,7 +295,7 @@ namespace TranslatePDF
 
             int totalPages = srcPdf.GetNumberOfPages();
             int start = Math.Max(0, from);
-            int end = Math.Min(totalPages - 1, to);
+            int end = Math.Min(totalPages, to);
             var fontPath = GetJapaneseFontPath();
 
             var font =

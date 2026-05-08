@@ -18,24 +18,21 @@ namespace TranslatePDF
         {
             var newKey = ApiKeyTextBox.Text?.Trim();
 
-            if (string.IsNullOrWhiteSpace(newKey))
-            {
-                MessageBox.Show(
-                    "APIキーが入力されていません",
-                    "エラー",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                //return;
-            }
-
             try
             {
-                // ここで保存
+                newKey = newKey?.Trim() ?? "";
+
                 DeepLService.UpdateApiKey(newKey);
 
-                // 重要：再初期化
-                DeepLService.Reset();
-                DeepLService.Initialize();
+                if (!string.IsNullOrWhiteSpace(newKey))
+                {
+                    DeepLService.Reset();
+                    DeepLService.Initialize();
+                }
+                else
+                {
+                    DeepLService.Reset();
+                }
 
                 DialogResult = true;
                 Close();

@@ -1,5 +1,4 @@
-﻿#define OCR
-using System.Text;
+﻿using System.Text;
 using System.Windows;
 using TranslatePDF.Services;
 using TranslatePDF.Views;
@@ -13,17 +12,19 @@ namespace TranslatePDF
     {
         protected override void OnStartup(StartupEventArgs e)
         {
-#if OCR
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-#endif
 
             base.OnStartup(e);
 
+            var mainWindow = new MainWindow();
+
+            MainWindow = mainWindow;
 
             // ★ APIキーが未設定なら入力させる
             if (!DeepLService.IsApiKeySet)
             {
                 var dialog = new ApiKeyInputWindow();
+                
                 if (dialog.ShowDialog() != true)
                 {
                     Shutdown();
@@ -33,7 +34,7 @@ namespace TranslatePDF
 
             // ★ APIキー確定後に初期化
             DeepLService.Initialize();
-            var mainWindow = new MainWindow();
+
             mainWindow.Show();
         }
     }
