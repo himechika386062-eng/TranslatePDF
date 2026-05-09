@@ -697,26 +697,52 @@ namespace TranslatePDF.Services
 
             var page = pdf.GetPage(pageIndex);
 
-            var listener =
+            var listenerImage =
                 new SimpleImageListener(
                     results,
                     pageIndex);
 
-            var parser =
-                new PdfCanvasProcessor(listener);
+            var parserImage =
+                new PdfCanvasProcessor(listenerImage);
 
-            parser.ProcessPageContent(page);
+            parserImage.ProcessPageContent(page);
 
+            var listenerText = new MyTextEventListener();
+
+            var parserText = new PdfCanvasProcessor(listenerText);
+
+            parserText.ProcessPageContent(page);
+
+            var charBlocks = listenerText.GetBlocks();
+
+            var filtered = new List<TextBlock>();
             // 座標変換
             foreach (var block in results)
             {
-                block.Y =
-                    pageHeight
-                    - block.Y
-                    - block.Height;
-                block.IsImage = true;
+                int count = 0;
+
+                foreach (var cb in charBlocks)
+                {
+                    if (IsInside(cb, block))
+                    {
+                        count++;
+                        if(count > 5)
+                        {
+                            break;
+                        }
+                    }
+                }
+                if (count <= 5)
+                {
+                    block.Y =
+                        pageHeight
+                        - block.Y
+                        - block.Height;
+                    block.IsImage = true;
+                    filtered.Add(block);
+                }
             }
-            return results;
+            return filtered;
         }
         
         private class SimpleImageListener : IEventListener

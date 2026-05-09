@@ -1,4 +1,4 @@
-﻿//#define SKIPTRANSLATE
+﻿#define SKIPTRANSLATE
 //#define OCR
 using iText.IO.Font;
 using iText.Kernel.Font;
@@ -356,7 +356,6 @@ namespace TranslatePDF
                         pageCopy,
                         originalSize.GetWidth(),
                         0);
-
                     offsetX =
                         originalSize.GetWidth();
                 }
