@@ -644,7 +644,7 @@ namespace TranslatePDF.Services
                 }
             }
             //*******************DEBUG用*********************
-            
+            /*
             using (var g = Graphics.FromImage(bitmap))
             {
                 using var pen = new Pen(Color.Red, 2);
@@ -659,6 +659,7 @@ namespace TranslatePDF.Services
                         b.Height);
                 }
             }
+            
             bitmap.Save($@"C:\Users\User\Downloads\debug_rect_{pageIndex}.png");
             string path = @"C:\Users\User\Downloads\debug_rect_" + pageIndex + ".pdf";
             using var matWithRects = bitmap.ToMat();
@@ -668,7 +669,7 @@ namespace TranslatePDF.Services
                 FileName = path,
                 UseShellExecute = true
             });
-            
+            */
             /////////////////////////ここまで//////////////////////
             //座標変換  
             foreach (var block in final)
